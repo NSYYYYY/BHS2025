@@ -33,8 +33,6 @@ image: ""
 
 This study was inspired by the potential to use various machine learning techniques to improve predictive performance of resting-state functional connectivity on various performances measures. Specifically for this project, 7021 features were utilised in an attempt to predict the cognition composite scores of children aged 9 - 10 years old. Participants were recruited as part of a larger multi-site study called the Adolescent Brain Cognitive Development (ABCD) study. This study aims to use the data obtained during the baseline assessment inconjunction with various regularized regression methods and predictive models in an attempt to better predict general cognition. The project consists of various steps such as 1) data consolidation and cleaning, 2) subsampling of data, 3) Training the model and 4)Results presentation.
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/PTYs_JFKsHI" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-
 ### Tools
 
 The "project template" project will rely on the following technologies:
