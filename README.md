@@ -1,3 +1,7 @@
+# BHS Project:
+# Predicting general cognition from resting-state functional brain connectivity
+
+
 Permission has been granted for data use of the National Institute of Mental Health (NIMH) Data Archive.
 The files utilise in this project were obtained from ABCD-HCP fMRI pipeline v0.0.2 by the DCANS lab team (Sturgeon et al., 2019) . Inclusion criteria included images that were not rejected due to incidental radiological findings, passing satisfactory protocol compliance, and passing FreeSurfer Quality Control. More details about the preprocessing process are detailed in prior work (Hagler et al., 2019).
 
