@@ -1,0 +1,299 @@
+---
+title: "BHS Data Cleaning"
+author: "Ngieng Shih Yang"
+date: "27th May 2025"
+remarks: 
+
+This file generates the listwise formatted files for use for the ridge regression scripts
+
+
+Files neccessary: demographics -"abcd_p_demo.xlsx",scannertype-"abcd_mri01.txt",quality_control- "mriqcrp10301.txt",little_man_task"nc_y_lmt.xlsx",SMARTE-"nc_y_smarte.xlsx",NIH_toolbox-"nc_y_nihtb.xlsx",rsFC_data-"abcd_rsFC119.RData",rsFC_labels-"labelsFC_schaefer119.csv", "abcd_y_lt.csv"
+
+Files generated: "listwise_lmtp_t2.csv", "listwise_lmtp_t2.csv", "listwise_lmtp_t3.csv", "listwise_smarte.csv", "listwise_reading.csv"
+  
+---
+
+```{r basic functions & Specifications}
+#clears global environment
+rm(list = ls()) 
+
+library(readxl)
+library(data.table) 
+library(stringr)
+library(dplyr)
+
+#clears plots if necessary
+#dev.off(dev.list()["RStudioGD"])  
+#setwd("C:/Users/Shih Yang/My Drive/NTU/Semester/FYP/Post FYP")
+getwd()
+```
+```{r loading of demographic information & scanner type} 
+
+#loading in demographic information
+suppressWarnings(demographics_raw <- read_excel("abcd_p_demo.xlsx"))
+
+#removing duplicated individuals
+demographics_baseline <- demographics_raw[!duplicated(demographics_raw$src_subject_id),] 
+
+#selection of variables to be used
+demographics <- subset(demographics_baseline, select = c(src_subject_id,eventname,race_ethnicity, demo_brthdat_v2,demo_sex_v2,demo_prnt_ed_v2)) 
+  #race_ethnicity: 1 = white, 2 = black, 3 = Hispanic, 4 =Asian, 5 = Other, 
+  #demo_sex_v2: 1 = male, 2 = female, 3 = inter-sex
+  #demo_prnt_ed_v2(parents highest education): 1 = 1st grade, 2 = 2nd  grade, 3 = 3rd grade, 4 = 4th grade, 5 = 5th grade, 6 = 6th grade, 7 = 7th grade, 8 = 8th grade, 9 = 9th grade, 10 = 10th grade, 11 = 11th grade, 12 = 12th grade, 13 = high school graduate, 14 = GED or equivalent diploma, 15 = some college, 16 = associate degree: occupational, 17 = associate degree:academic program, 18 = bachelors degree, 19 = masters degree, 20 = professional school degree, 21 = doctoral degree, 777= refused to answer
+
+#removal of intersex individuals (3 individuals)
+demographics <- subset (demographics,demographics$demo_sex_v2 != "3") 
+
+#re-labelling of columns for clarity
+names(demographics)[names(demographics) =="demo_sex_v2"] <- "sex" #renaming of the column names
+names(demographics)[names(demographics) =="demo_brthdat_v2"] <- "years_old" #renaming of the column names
+demographics$sex <- (demographics$sex - 1) #changing labeling of sex to male = 0, female =1 
+names(demographics)[names(demographics) == "demo_prnt_ed_v2"] <- "parent_education"
+
+#dummy coding of race_ethnicity for use as a covariate in ridge regression modelling 0 = NA
+demographics$r_e_white <- ifelse(demographics$race_ethnicity=="1",1,0)
+demographics$r_e_black <- ifelse(demographics$race_ethnicity=="2",1,0)
+demographics$r_e_Hispanic <- ifelse(demographics$race_ethnicity=="3",1,0)
+demographics$r_e_Asian <- ifelse(demographics$race_ethnicity=="4",1,0)
+demographics$r_e_Other <- ifelse(demographics$race_ethnicity=="5",1,0)
+ 
+
+demographics[c("r_e_white","r_e_black","r_e_Hispanic","r_e_Asian","r_e_Other")][is.na(demographics[c("r_e_white","r_e_black","r_e_Hispanic","r_e_Asian","r_e_Other")])] <- 0
+
+
+#dummy coding of parents education (1st grade is reference)
+#demographics$p_e_1stgrade <- ifelse(demographics$parent_education=="1",1,0)
+demographics$p_e_2ndgrade <- ifelse(demographics$parent_education=="2",1,0)
+demographics$p_e_3rdgrade <- ifelse(demographics$parent_education=="3",1,0)
+demographics$p_e_4thgrade <- ifelse(demographics$parent_education=="4",1,0)
+demographics$p_e_5thgrade <- ifelse(demographics$parent_education=="5",1,0)
+demographics$p_e_6thgrade <- ifelse(demographics$parent_education=="6",1,0)
+demographics$p_e_7thgrade <- ifelse(demographics$parent_education=="7",1,0)
+demographics$p_e_8thgrade <- ifelse(demographics$parent_education=="8",1,0)
+demographics$p_e_9thgrade <- ifelse(demographics$parent_education=="9",1,0)
+demographics$p_e_10thgrade <- ifelse(demographics$parent_education=="10",1,0)
+demographics$p_e_11thgrade <- ifelse(demographics$parent_education=="11",1,0)
+demographics$p_e_12thgrade <- ifelse(demographics$parent_education=="12",1,0)
+demographics$p_e_highschool <- ifelse(demographics$parent_education=="13",1,0)
+demographics$p_e_GED_ediploma <- ifelse(demographics$parent_education=="14",1,0)
+demographics$p_e_college <- ifelse(demographics$parent_education=="15",1,0)
+demographics$p_e_adeg_o <- ifelse(demographics$parent_education=="16",1,0)
+demographics$p_e_adeg_a <- ifelse(demographics$parent_education=="17",1,0)
+demographics$p_e_ba_deg <- ifelse(demographics$parent_education=="18",1,0)
+demographics$p_e_ma_deg <- ifelse(demographics$parent_education=="19",1,0)
+demographics$p_e_pro_sch <- ifelse(demographics$parent_education=="20",1,0)
+demographics$p_e_doc_deg<- ifelse(demographics$parent_education=="21",1,0)
+demographics$p_e_refuse <- ifelse(demographics$parent_education=="777",1,0)
+
+#loading in additional demographic information
+suppressWarnings(demographics_raw_file2 <- read.csv("abcd_y_lt.csv"))
+demographics_age_full <- subset(demographics_raw_file2, select = c (src_subject_id,eventname,site_id_l,interview_date,interview_age,visit_type))
+  #site_id_l = site Id, there are a total of 22 sites
+  #visit_type: 1 = in person, 2 = remote, 3 = hybrid
+
+#dummy coding of visit type for use as a covariate in ridge regression modelling
+demographics_age_full$visit_type_person <- ifelse(demographics_age_full$visit_type=="1",1,0)
+demographics_age_full$visit_type_remote <- ifelse(demographics_age_full$visit_type=="2",1,0)
+demographics_age_full$visit_type_hybrid <- ifelse(demographics_age_full$visit_type=="3",1,0)
+
+#splitting of demographics data into its respective years (baseline, 2y followup, 4y followup, etc.)
+demographics_age_etc_split <- split(demographics_age_full, demographics_age_full$eventname)
+
+#saving each split into data franes
+for (eventname in names(demographics_age_etc_split)) {
+  assign(paste0("demo_age_",eventname), demographics_age_etc_split[[eventname]])
+}
+
+#merging abcd_p_demo and abcd_y_lt files baseline together (full baseline) after removal of 3 intersex individuals
+demographics_age_base <- merge(demographics, demo_age_baseline_year_1_arm_1, by = c("src_subject_id"))
+demographics_age_base <- subset(demographics_age_base, select = -c(eventname.y))
+names(demographics_age_base)[names(demographics_age_base) == "eventname.x"] <- "eventname"
+
+
+#merging the files to obtain the age of scan and gap between the respective years
+
+demographics_age_2y <- merge(demographics_age_base,demo_age_2_year_follow_up_y_arm_1, by = c ("src_subject_id"))
+demographics_age_2y$time_elapsed <- demographics_age_2y$interview_age.y - demographics_age_2y$interview_age.x
+
+demographics_age_4y <- merge(demographics_age_base,demo_age_4_year_follow_up_y_arm_1, by = c ("src_subject_id"))
+demographics_age_4y$time_elapsed <- demographics_age_4y$interview_age.y - demographics_age_4y$interview_age.x
+
+demographics_age_base$time_elapsed <- 0
+
+#loading of mri scanner information
+mri_scannertype_raw <- read.table("abcd_mri01.txt", header = TRUE)
+mri_scannertype_baseline <- mri_scannertype_raw[-c(1),] #remove additional labeling on second row
+
+#only baseline MRI machine information is required for this analysis
+mri_scannertype_baseline <- mri_scannertype_baseline[mri_scannertype_baseline$eventname == "baseline_year_1_arm_1",] 
+
+#selection of only necessary variables
+mri_scannertype_baseline <- subset(mri_scannertype_baseline, select = c(src_subject_id,interview_date,interview_age,sex,eventname,mri_info_visitid,mri_info_manufacturersmn)) 
+
+#dummy coding of scanner type for use as a covariate in ridge regression modelling
+# achieva will be used as the reference
+#mri_scannertype_baseline$scanner_achieva <- ifelse(mri_scannertype_baseline$mri_info_manufacturersmn=="Achieva dStream",1,0)
+mri_scannertype_baseline$scanner_disco <- ifelse(mri_scannertype_baseline$mri_info_manufacturersmn=="DISCOVERY MR750",1,0)
+mri_scannertype_baseline$scanner_ingenia <- ifelse(mri_scannertype_baseline$mri_info_manufacturersmn=="Ingenia",1,0)
+mri_scannertype_baseline$scanner_prisma <- ifelse(mri_scannertype_baseline$mri_info_manufacturersmn=="Prisma",1,0)
+mri_scannertype_baseline$scanner_prismafit <- ifelse(mri_scannertype_baseline$mri_info_manufacturersmn=="Prisma_fit",1,0)
+
+#just to check the number of individual demographics information available
+intersect_check <- intersect(demographics_age_base$src_subject_id,mri_scannertype_baseline$src_subject_id)
+
+demographics_age_base_scanner <- merge(demographics_age_base,mri_scannertype_baseline, by = c ("src_subject_id")) #merges demographics with scannertype file
+demographics_age_2y_scanner <- merge(demographics_age_2y,mri_scannertype_baseline, by = c ("src_subject_id")) #merges demographics with scannertype file
+demographics_age_4y_scanner <- merge(demographics_age_4y,mri_scannertype_baseline, by = c ("src_subject_id")) #merges demographics with scannertype file
+
+#cleaning up of the duplicated columns
+demographics_age_base_scanner <- subset(demographics_age_base_scanner, select = -c(sex.y,eventname.y,interview_age.y)) 
+
+#renaming of column names for clarity
+names(demographics_age_base_scanner)[names(demographics_age_base_scanner) =="eventname.x"] <- "eventname"
+names(demographics_age_base_scanner)[names(demographics_age_base_scanner) =="sex.x"] <- "sex"
+names(demographics_age_base_scanner)[names(demographics_age_base_scanner) =="interview_age.x"] <- "interview_age"
+
+#removal of excessive data in the global environment for cleanliness
+rm(demographics,demographics_baseline,demographics_raw,mri_scannertype_raw,mri_scannertype_baseline,demographics_raw_file2,demographics_age_etc_split,demo_age_6_month_follow_up_arm_1,demo_age_1_year_follow_up_y_arm_1,demo_age_18_month_follow_up_arm_1,demo_age_30_month_follow_up_arm_1,demo_age_42_month_follow_up_arm_1)
+
+rm(eventname,demo_age_baseline_year_1_arm_1,demo_age_2_year_follow_up_y_arm_1,demo_age_3_year_follow_up_y_arm_1,demo_age_4_year_follow_up_y_arm_1,demographics_age_2y,demographics_age_4y)
+ 
+#makes sure this value is identical with obs for demographics_scannertype before removal
+rm(intersect_check)
+```
+```{r loading of rsfmri data}
+#loading of 119x119 data file #note: schaefer 100 atlas + 19 subcortical nodes including cerebellum
+load("abcd_rsFC119.RData")
+rsfc_baseline <- rsFC_dat_baseline_inc
+
+#loading label file for schaefer
+rsfc_label <- read.csv("labelsFC_schaefer119.csv")
+
+#just to check the number of individual fmri information available
+intersect_check_1 <- intersect(demographics_age_base_scanner$src_subject_id,rsfc_baseline$src_subject_id)
+
+#merging the demographics scannertype information with rsfc baseline information
+rsfc_baseline_scannertype <- merge (demographics_age_base_scanner,rsfc_baseline, by = c ("src_subject_id"))
+rsfc_2y_scannertype <- merge (demographics_age_2y_scanner,rsfc_baseline, by = c ("src_subject_id"))
+rsfc_4y_scannertype <- merge (demographics_age_4y_scanner,rsfc_baseline, by = c ("src_subject_id"))
+
+#removal of excessive data in the global environment for cleanliness
+rm(rsFC_dat_baseline_inc,rsfc_baseline)
+#makes sure this value is identical with obs for demographics_scannertype before removal
+rm(intersect_check_1)
+
+#note QC has been done prior to the generation of the abcd_rsFC119.Rdata file
+#note that includes only scans that have 375 or more valid volumes. Some volumes are 'invalidated' due to excessive head motion
+#failed internal QC from ABCD has also been filtered out
+```
+```{r loading of cognition composite scores (from nih toolbox)}
+suppressWarnings(nimhtoolbox_raw <- read_excel("nc_y_nihtb.xlsx"))
+
+#removal of nonreading/unneccessary columns
+cog_comp_tp_full <- subset(nimhtoolbox_raw, select = c(src_subject_id,eventname,nihtbx_totalcomp_uncorrected))
+
+rm(nimhtoolbox_raw)
+
+#remove NA data in uncorrected data
+cog_comp_tp_full_rm_na<-cog_comp_tp_full[!is.na(cog_comp_tp_full$nihtbx_totalcomp_uncorrected),]
+
+#-----------------------Data prep for ridge regression of cognitive composite
+#splitting of cognitive composite data into its respective years (baseline, 2y followup, 4y followup)
+cog_comp_tp_full_split <- split(cog_comp_tp_full_rm_na,cog_comp_tp_full_rm_na$eventname)
+
+#saving each split into data frames
+for (eventname in names(cog_comp_tp_full_split)) {
+  assign(paste0("cog_comp_tp_",eventname), cog_comp_tp_full_split[[eventname]])
+}
+
+#renaming for clarity
+cog_comp_tp_t1 <- cog_comp_tp_baseline_year_1_arm_1
+cog_comp_tp_t2 <- cog_comp_tp_2_year_follow_up_y_arm_1
+cog_comp_tp_t3 <- cog_comp_tp_4_year_follow_up_y_arm_1
+
+#removal of excessive data in the global environment for cleanliness
+rm(cog_comp_tp_full_split,cog_comp_tp_baseline_year_1_arm_1,cog_comp_tp_2_year_follow_up_y_arm_1,cog_comp_tp_4_year_follow_up_y_arm_1,eventname)
+```
+```{r data availablility}
+library(dplyr)
+library(purrr)
+
+#cogcomp T1
+#merging cog comp with rsfc & scanner type
+rr_cog_comp_t1 <- merge(cog_comp_tp_t1, rsfc_baseline_scannertype, by = c("src_subject_id"))
+rr_cog_comp_t1 <- subset(rr_cog_comp_t1, select = -c(eventname.y,interview_date.y)) #cleaning up of the
+#
+names(rr_cog_comp_t1)[names(rr_cog_comp_t1) =="eventname.x"] <- "eventname" #renaming of the column names
+names(rr_cog_comp_t1)[names(rr_cog_comp_t1) =="sex.x"] <- "sex" #renaming of the column names
+names(rr_cog_comp_t1)[names(rr_cog_comp_t1) =="interview_age.x"] <- "interview_age" #renaming of the column names
+
+# Number of columns to remove
+no_to_remove <- 7021
+
+# Remove the last 7021 columns
+rr_cog_comp_t1_count <- rr_cog_comp_t1[, -seq(ncol(rr_cog_comp_t1), ncol(rr_cog_comp_t1) - no_to_remove + 1, by = -1)]
+
+available_list <- list(rr_cog_comp_t1_count)
+
+result_df <- reduce(available_list, inner_join, by = "src_subject_id")
+
+all_available <- result_df[!duplicated(result_df$src_subject_id),]
+available_id <- as.data.frame(all_available$src_subject_id)
+names(available_id)[names(available_id) =="all_available$src_subject_id"] <- "src_subject_id"
+
+rm(demographics_age_2y_scanner,demographics_age_3y_scanner,demographics_age_4y_scanner,demographics_age_base_scanner,demographics_age_full,lmtp_tp_base,result_df, rr_lmtp_tp_t1_count,no_to_remove)
+
+print("loading of data completed")
+```
+```{r generating output for rr cog comp t1}
+#formatting for each model that will created and writing into a separate CSV
+#A total of 5 models will be created
+rr_cog_comp_tp_t1 <- merge(available_id,rr_cog_comp_t1, by = c ("src_subject_id"))
+
+#designated columns that consist of the rsFC data
+ncol_start <- (ncol(rr_cog_comp_tp_t1)-7020) 
+ncol_end <- ncol(rr_cog_comp_tp_t1) #this needs to be setup before other columns are added
+
+#setting up training features in a matrix (make sure to adjust the column number***)
+rr_cog_comp__t1_rsfmri<- data.matrix(rr_cog_comp_tp_t1[,ncol_start:ncol_end])
+print(ncol_end-ncol_start)
+print(ncol_end)
+
+rr_cog_comp_t1_train <- bind_cols(
+  rr_cog_comp__t1_rsfmri,
+  rr_cog_comp_tp_t1 %>%
+    select(
+      sex,
+      r_e_white, r_e_black, r_e_Hispanic, r_e_Asian, r_e_Other,
+      interview_age,
+      p_e_2ndgrade, p_e_3rdgrade, p_e_4thgrade, p_e_5thgrade,
+      p_e_6thgrade, p_e_7thgrade, p_e_8thgrade, p_e_9thgrade,
+      p_e_10thgrade, p_e_11thgrade, p_e_12thgrade,
+      p_e_highschool, p_e_GED_ediploma, p_e_college,
+      p_e_adeg_o, p_e_adeg_a, p_e_ba_deg, p_e_ma_deg,
+      p_e_pro_sch, p_e_doc_deg, p_e_refuse,
+      scanner_disco, scanner_ingenia, scanner_prisma,
+      scanner_prismafit, time_elapsed
+    )
+)
+
+
+# Create the folder if it doesn't exist
+if (!dir.exists("clean data")) {
+  dir.create("clean data")
+}
+
+# Internal helper function to write only if file doesn't exist
+write_if_not_exists <- function(data, file_path) {
+  if (file.exists(file_path)) {
+    message(paste('File:', basename(file_path), 'exists'))
+  } else {
+    write.csv(data, file = file_path, row.names = FALSE)
+  }
+}
+
+# Conditionally save the two CSV files
+write_if_not_exists(rr_cog_comp_t1_train, "clean data/cog_comp_t1_train.csv")
+write_if_not_exists(rr_cog_comp_tp_t1$nihtbx_totalcomp_uncorrected, "clean data/cog_comp_t1_score.csv")
+write_if_not_exists(rr_cog_comp_tp_t1, "clean data/cog_comp_t1_full.csv")
+```
