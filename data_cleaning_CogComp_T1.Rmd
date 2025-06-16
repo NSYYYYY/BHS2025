@@ -4,13 +4,15 @@ author: "Ngieng Shih Yang"
 date: "27th May 2025"
 remarks: 
 
-This file generates the listwise formatted files for use for the ridge regression scripts
+This file generates the listwise formatted files for use for the ridge regression scripts in Python
 
 
-Files neccessary: demographics -"abcd_p_demo.xlsx",scannertype-"abcd_mri01.txt",quality_control- "mriqcrp10301.txt",little_man_task"nc_y_lmt.xlsx",SMARTE-"nc_y_smarte.xlsx",NIH_toolbox-"nc_y_nihtb.xlsx",rsFC_data-"abcd_rsFC119.RData",rsFC_labels-"labelsFC_schaefer119.csv", "abcd_y_lt.csv"
+Files neccessary: demographics -"abcd_p_demo.xlsx",scannertype-"abcd_mri01.txt", NIH_toolbox-"nc_y_nihtb.xlsx",rsFC_data-"abcd_rsFC119.RData",rsFC_labels-"labelsFC_schaefer119.csv", "abcd_y_lt.csv"
 
-Files generated: "listwise_lmtp_t2.csv", "listwise_lmtp_t2.csv", "listwise_lmtp_t3.csv", "listwise_smarte.csv", "listwise_reading.csv"
-  
+Files generated: 
+1) cog_comp_t1_train.csv
+2) cog_comp_t1_score.csv
+3) cog_comp_t1_full.csv
 ---
 
 ```{r basic functions & Specifications}
